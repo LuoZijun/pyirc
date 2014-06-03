@@ -299,7 +299,7 @@ class IRC:
 
 
 if __name__ == '__main__':
-    server  = ('irc.icq.com',6667)
+    server  = ('irc.freenode.com',6667)
     nick = 'PyBot'              # 昵称
     name = 'pybot'            # 用户名
     realname = 'PYBOT'    # 真实名称
