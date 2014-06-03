@@ -252,7 +252,7 @@ class IRC:
 
                 if command == 'ping':
                     print('心跳：' + arguments[0] )
-                    self.send(arguments[0]+'\r\n')
+                    self.send('PONG ' + arguments[0]+'\r\n')
                 elif command in ["privmsg", "notice"]:
                     target, message = arguments[0], arguments[1]
                     #messages = _ctcp_dequote(message)
@@ -268,10 +268,18 @@ class IRC:
                         source = prefix.split('!')[0]
                     else:
                         source = prefix
-                    print("%s From %s To %s : %s" %(command,source,target,message))
+                    print("%s From %s To %s : %s" %(command,source,target,message.decode('GB18030')))
                     if '#' in message:
                         # 加入频道
                         self.send('JOIN %s\r\n' %message )
+                        self.send("PRIVMSG %s :我来了。\r\n" %(message) )
+                    elif message == 'quit':
+                        self.send('PART %s %s\r\n' %(message,'我要躲起来～') )
+                        self.conn.close()
+                    elif message == 'part':
+                        self.send("PRIVMSG %s :yes I'm receiving it !receiving it !\r\n" %(source) )
+                        self.send('QUIT %s\r\n' %('我被终结了==') )
+                        
                 elif command in numeric_events:
                     # 代码消息（系统代码）
                     if int(command) == 433:
@@ -291,8 +299,8 @@ class IRC:
 
 
 if __name__ == '__main__':
-    server  = ('irc.freenode.net',6667)
-    nick = 'DDbot'              # 昵称
+    server  = ('irc.icq.com',6667)
+    nick = 'PyBot'              # 昵称
     name = 'pybot'            # 用户名
     realname = 'PYBOT'    # 真实名称
     irc = IRC( server, nick, name, realname )
