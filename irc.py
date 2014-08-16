@@ -3,6 +3,7 @@
 #author:luozijun
 #email:gnulinux@126.com
 
+from multiprocessing import Process, Queue, current_process
 import os,sys,time,re
 import socket
 
@@ -13,6 +14,7 @@ numeric_events = {
     "003": "created",
     "004": "myinfo",
     "005": "featurelist",  # XXX
+    "042": "uniqueid", # :hybrid8.debian.local 042 PyBot 0HYAAAAAG :your unique ID (irc-hybrid)
     "200": "tracelink",
     "201": "traceconnecting",
     "202": "tracehandshake",
@@ -193,119 +195,183 @@ protocol_events = [
     "quit",
     "invite",
     "pong",
+    "notice",
 ]
 
+class Event:
+    "message event"
+    def __init__(self, parent, message):
+        pass
+    def error(self):
+        pass
+    def join(self):
+        pass
+    def kick(self):
+        pass
+    def mode(self):
+        pass
+    def part(self):
+        pass
+    def ping(self):
+        pass
+    def pong(self):
+        pass
+    def quit(self):
+        pass
+    def invite(self):
+        pass
+    def privmsg(self):
+        pass
+    def privnotice(self):
+        pass
+    def pubmsg(self):
+        pass
+    def pubnotice(self):
+        pass
 
-
-
+class Command:
+    "IRC Command"
+    def __init__(self):
+        pass
 
 
 class IRC:
-    def __init__(self,server,nick,name,realname):
-        "初始化"
-        self.server = server  # tuple , like (HOST,PORT)
+    def __init__(self, server, nick, name, realname, charcode="GB18030"):
+        self.server = server   # ('irc.server.com', 6667)
         self.nick = nick
         self.name = name
         self.realname = realname
-        self.conn = self.connection()
-    def connection(self):
-        "建立IRC协议连接"
-        s = socket.socket()
-        s.connect(self.server)
-        s.send("NICK %s\nUSER %s %s bla :%s\n" % (self.nick,self.name, self.server[0], self.realname))
-        return s
-    def send(self,msg):
-        "发送信息"
-        return self.conn.send(msg)
-    def recv(self):
-        "接收信息"
+        self.charcode = charcode
+        self.isauth = 0
+    def connect(self):
+        # connect to irc server
+        self.connection = socket.socket()
+        self.connection.connect(self.server)
+    def send(self, message):
+        "send message to irc server"
+        return self.connection.send(message.decode('utf8').encode(self.charcode))
+    def send_raw(self,raw_message):
+        "send raw message to irc server"
+        return self.connection.send(raw_message)
+    def set_charset(self, charcode):
+        "setting message charcode."
+        self.charcode = charcode
+    def recv(self, inbox):
+        "recv message from irc server."
         buff = ''
         while True:
-            temp = self.conn.recv(4096)
-            if not temp:
-                break
-            buff = buff + temp
-            if temp[len(temp)-2:] == '\r\n' or temp[len(temp)-1:] == '\n':
-                # 数据结束,解析
-                self.parse(buff)
-                buff = ''
-    def parse(self,buff):
-        buff = buff.replace('\r\n','\n').split('\n')
-        for line in buff:
-            line = line.rstrip()
-            if line:
-                _rfc_1459_command_regexp = re.compile("^(:(?P<prefix>[^ ]+) +)?(?P<command>[^ ]+)( *(?P<argument> .+))?")
-                m = _rfc_1459_command_regexp.match(line)
-                if m.group("prefix"):
-                    "server name/nick mask/protocol event"
-                    "verne.freenode.net / luozijun!~luozijun@58.48.138.43 / "
-                    # 当 command 为 mode 时，prefix 为 nick.
-                    # 当 command 为 ping 时，prefix为 空
-                    prefix = m.group("prefix")
-                if m.group("command"):
-                    command = m.group("command").lower()
-                if m.group("argument"):
-                    a = m.group("argument").split(" :", 1)
-                    arguments = a[0].split()
-                    if len(a) == 2:
-                        arguments.append(a[1])
-
-                if command == 'ping':
-                    print('心跳：' + arguments[0] )
-                    self.send('PONG ' + arguments[0]+'\r\n')
-                elif command in ["privmsg", "notice"]:
-                    target, message = arguments[0], arguments[1]
-                    #messages = _ctcp_dequote(message)
-                    if command == "privmsg":
-                        if target[0:1] in "#&+!":
-                            command = "pubmsg"
-                    else:
-                        if target[0:1] in "#&+!":
-                            command = "pubnotice"
-                        else:
-                            command = "privnotice"
-                    if '@' in prefix:
-                        source = prefix.split('!')[0]
-                    else:
-                        source = prefix
-                    print("%s From %s To %s : %s" %(command,source,target,message.decode('GB18030')))
-                    if '#' in message:
-                        # 加入频道
-                        self.send('JOIN %s\r\n' %message )
-                        self.send("PRIVMSG %s :我来了。\r\n" %(message) )
-                    elif message == 'quit':
-                        self.send('PART %s %s\r\n' %(message,'我要躲起来～') )
-                        self.conn.close()
-                    elif message == 'part':
-                        self.send("PRIVMSG %s :yes I'm receiving it !receiving it !\r\n" %(source) )
-                        self.send('QUIT %s\r\n' %('我被终结了==') )
-                        
-                elif command in numeric_events:
-                    # 代码消息（系统代码）
-                    if int(command) == 433:
-                        # 需要检查 nickserver@!NickServer 的对话，避免昵称已被占用
-                        print('系统：昵称 %s 已经被占用' %arguments[1] )
-                    else:
-                        print(repr(str(line)))
-                        #print("System %s : %s    command: %s" %(str(prefix),str(arguments),str(command)) )
-                elif command in protocol_events:
-                    # 协议消息（ERROR/PONG....）
+            temp = self.connection.recv(4096)
+            if temp:
+                buff += temp
+                if temp[len(temp)-2:] == '\r\n' or temp[len(temp)-1:] == '\n':
                     try:
-                        print("command : %s  %s" %(command,arguments[1]))
+                        buff = buff.decode(self.charcode).encode('utf8')
                     except:
-                        print('协议消息打印异常：%s' % ( repr(str(line)) ))
+                        pass
+                    lines = buff.split("\r\n")
+                    for line in lines:
+                        if line != '':
+                            print '>> %s' %(repr(line))
+                            message = self.parse(line)
+                            print message
+                            inbox.put(message)    # 队列
+    def parse(self,buff):
+        "parse irc message"
+        regexp = re.compile("^(:(?P<prefix>[^ ]+) +)?(?P<command>[^ ]+)( *(?P<argument> .+))?")
+        m = regexp.match(buff) #_rfc_1459_command_regexp
+        message = {}
+        if m.group("prefix"):
+            message['prefix'] = m.group("prefix")
+        if m.group("command"):
+            message['command'] = m.group("command").lower()
+        if m.group("argument"):
+            a = m.group("argument").split(" :", 1)
+            arguments = a[0].split()
+            if len(a) == 2:
+                arguments.append(a[1])
+            message['arguments'] = arguments
+        return message
+    def process(self, inbox):
+        "process irc message"
+        while True:
+            message = inbox.get(True)
+            if message:
+                command = message['command']
+                #print "++++: %s" % repr(str(message))
+                try:
+                    prefix = message['prefix']
+                except:
+                    prefix = ''
+                arguments = message['arguments']
+                if command and command in numeric_events:
+                    print ':: numeric_events pass'
+                elif command and command in protocol_events:
+                    if command == 'ping':
+                        print ":: PONG SERVER DONE."
+                        self.connection.send('PONG ' + arguments[0]+'\r\n')
+                    elif command == 'error':
+                        #print message
+                        pass
+                    elif command in ['notice', 'mode', 'ping', 'invite', 'pong']:
+                        if command == 'notice' and arguments[0].lower() == 'auth' and self.isauth == 0:
+                            "send nick and name infomation"
+                            msg = "NICK %s\nUSER %s %s bla :%s\n" % (self.nick,self.name, self.server[0], self.realname)
+                            print ":: auth ..."
+                            self.connection.send(msg)
+                            self.isauth = 1
+                        else:
+                            #print message
+                            pass
+                    elif command in ['privmsg', 'privnotice', 'pubmsg', 'pubnotice']:
+                        #print message
+                        pass
+                    elif command in ['quit', 'part', 'kick', 'join']:
+                        #print message
+                        pass
                 else:
-                    print(repr(str(line)))
+                    print "*****************************Unknow**************************"
+                    print message
+            else: break
+    def loop(self):
+        "Loop recv message from irc server."
+        inbox = Queue()              # message inbox.
+        read_handle = Process(target=self.recv, args=(inbox,))
+        process_handle = Process(target=self.process, args=(inbox,))
+        
+        read_handle.start()
+        process_handle.start()
+        
+        read_handle.join()
+        process_handle.join()
+
+"""
+Command:
+    'PRIVMSG %s :%s:%s\r\n' %(target,source,msg.replace(self.nick + ':','').replace(self.nick,''))
+    'JOIN %s\r\n' %message
+    "PRIVMSG %s :我是机器人。\r\n" %(message)
+    'PART %s %s\r\n' %(message,'我要躲起来～')
+    'QUIT %s\r\n' %('我被终结了==')
+    'PRIVMSG %s :%s:%s\r\n' %(target,source,msg.replace(self.nick + ':','').replace(self.nick,''))
+    "PRIVMSG %s :yes I'm receiving it !receiving it !\r\n" %('#chinese')
+    
+"""
 
 
 if __name__ == '__main__':
-    server  = ('irc.freenode.com',6667)
+    s = IRC(('luozijun.me',6670),'PyBot33','Python','PY')
+    s.connect()
+    s.loop()
+
+    """
+    server  = ('irc.icq.com',6667)
     nick = 'PyBot'              # 昵称
     name = 'pybot'            # 用户名
     realname = 'PYBOT'    # 真实名称
     irc = IRC( server, nick, name, realname )
+    
     while True:
         msg = irc.recv()
         if not msg:
             print '**** The MSG is None.\n'
             break
+    """
