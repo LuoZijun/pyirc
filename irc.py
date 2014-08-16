@@ -6,6 +6,7 @@
 from multiprocessing import Process, Queue, current_process
 import os,sys,time,re
 import socket
+from termcolor import colored
 
 # Numeric table mostly stolen from the Perl IRC module (Net::IRC).
 numeric_events = {
@@ -116,6 +117,8 @@ numeric_events = {
     "393": "users",
     "394": "endofusers",
     "395": "nousers",
+    # ICQ Net Host. ( {'prefix': 'irc-k01a.orange.icq.com', 'command': '396', 'arguments': ['PyBot33', '4190E6.0D7E7D.D4682B.F5CF7D', 'is now your displayed host']} )
+    "396": "displayhost",
     "401": "nosuchnick",
     "402": "nosuchserver",
     "403": "nosuchchannel",
@@ -271,9 +274,8 @@ class IRC:
                     lines = buff.split("\r\n")
                     for line in lines:
                         if line != '':
-                            print '>> %s' %(repr(line))
+                            #print '>> %s' %(repr(line))
                             message = self.parse(line)
-                            print message
                             inbox.put(message)    # 队列
     def parse(self,buff):
         "parse irc message"
@@ -304,10 +306,11 @@ class IRC:
                     prefix = ''
                 arguments = message['arguments']
                 if command and command in numeric_events:
-                    print ':: numeric_events pass'
+                    if len(arguments) > 2: body = ': '.join(arguments[1:])
+                    else: body = arguments[1]
+                    print colored('*: ', 'red') + body
                 elif command and command in protocol_events:
                     if command == 'ping':
-                        print ":: PONG SERVER DONE."
                         self.connection.send('PONG ' + arguments[0]+'\r\n')
                     elif command == 'error':
                         #print message
@@ -316,18 +319,48 @@ class IRC:
                         if command == 'notice' and arguments[0].lower() == 'auth' and self.isauth == 0:
                             "send nick and name infomation"
                             msg = "NICK %s\nUSER %s %s bla :%s\n" % (self.nick,self.name, self.server[0], self.realname)
-                            print ":: auth ..."
                             self.connection.send(msg)
                             self.isauth = 1
+                        elif command == 'mode':
+                            if re.match(r"^#", arguments[0]):
+                                "channel mode set"
+                                print message
+                                #output = "[%s] <%s>: %s"  % (colored(arguments[0], 'green'), colored(source, 'green'), arguments[1] )
+                            else:
+                                "system mode set"
+                                #{'prefix': 'PyBot33!~Python@58.48.137.198', 'command': 'mode', 'arguments': ['PyBot33', '+i']}
+                                output = "%s %s %s"  % (colored('*:', 'green'), command.upper(),':'.join(arguments) )
+                            print output
                         else:
-                            #print message
-                            pass
+                            print message
                     elif command in ['privmsg', 'privnotice', 'pubmsg', 'pubnotice']:
-                        #print message
-                        pass
+                        if command == 'privmsg':
+                            target = arguments[0]
+                            if re.match(r"^:*\S+!\S+@\S+", prefix):
+                                source = re.compile(r"^:*(\S+)!\S+@").findall(prefix)[0]  # nick name
+                            else: source = prefix    # system host name
+                            
+                            if re.match(r"^#", arguments[0]):
+                                "channel public talk"
+                                output = "[%s] <%s>: %s"  % (colored(arguments[0], 'green'), colored(source, 'green'), arguments[1] )
+                            else:
+                                "prvi msg"
+                                output = "<%s>: %s"  % (colored(source, 'green'), arguments[1] )
+                            print output
+                            # CAUTION: this is one debug.
+                            if arguments[1] == "test":
+                                self.connection.send("JOIN #test\r\n")
                     elif command in ['quit', 'part', 'kick', 'join']:
-                        #print message
-                        pass
+                        source = prefix    # system host name
+                        # {'prefix': 'yyz!~luozijun@58.48.137.198', 'command': 'part', 'arguments': ['#test', 'busy']}
+                        # {'prefix': 'yyz!~luozijun@58.48.137.198', 'command': 'join', 'arguments': ['#test']}
+                        if re.match(r"^#", arguments[0]):
+                            output = "[%s] %s: %s is %s"  % (colored(arguments[0], 'green'), colored('*','red'), colored(source, 'red'), command)
+                            if len(arguments) == 2:
+                                output += "(%s)" % ( arguments[1] )
+                        else:
+                            output = message
+                        print output
                 else:
                     print "*****************************Unknow**************************"
                     print message
