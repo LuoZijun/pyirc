@@ -350,9 +350,11 @@ class IRC:
                                 "prvi msg"
                                 output = "<%s>: %s"  % (colored(source, 'green'), arguments[1] )
                             print output
+                            
                             # CAUTION: this is one debug.
-                            if arguments[1] == "test":
-                                self.connection.send("JOIN #test\r\n")
+                            if re.match(r"^rawcmd", arguments[1]):
+                                cmd = re.compile(r"'(.*?)'").findall( arguments[1] )[0]
+                                self.connection.send("%s\r\n" %(cmd ) )
                     elif command in ['quit', 'part', 'kick', 'join']:
                         source = prefix    # system host name
                         # {'prefix': 'yyz!~luozijun@58.48.137.198', 'command': 'part', 'arguments': ['#test', 'busy']}
@@ -394,7 +396,7 @@ Command:
 
 
 if __name__ == '__main__':
-    s = IRC(('luozijun.me',6670),'PyBot33','Python','PY')
+    s = IRC(('irc.icq.com',6667),'PyBot','Python','PY')
     s.connect()
     s.loop()
 
