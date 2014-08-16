@@ -331,6 +331,9 @@ class IRC:
                                 #{'prefix': 'PyBot33!~Python@58.48.137.198', 'command': 'mode', 'arguments': ['PyBot33', '+i']}
                                 output = "%s %s %s"  % (colored('*:', 'green'), command.upper(),':'.join(arguments) )
                             print output
+                        elif command == 'notice':
+                            output = "%s <%s> %s" %( colored('*:', 'red'), colored(arguments[0], 'red'), arguments[1]  )
+                            print output
                         else:
                             print message
                     elif command in ['privmsg', 'privnotice', 'pubmsg', 'pubnotice']:
