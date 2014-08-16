@@ -396,7 +396,7 @@ Command:
 
 
 if __name__ == '__main__':
-    s = IRC(('irc.icq.com',6667),'PyBot','Python','PY')
+    s = IRC(('irc.freenode.net',6667),'PyBot','Python','PY')
     s.connect()
     s.loop()
 
