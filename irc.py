@@ -367,8 +367,9 @@ class IRC:
                             output = message
                         print output
                 else:
-                    print "*****************************Unknow**************************"
+                    print colored("*****************************UNKNOW MESSAGE TYPE**************************",'red')
                     print message
+                    print colored("*****************************UNKNOW MESSAGE TYPE**************************",'red')
             else: break
     def loop(self):
         "Loop recv message from irc server."
